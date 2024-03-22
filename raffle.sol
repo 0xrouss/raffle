@@ -20,7 +20,7 @@ contract Raffle is Ownable, ReentrancyGuard {
         uint256 _ticketPrice,
         uint256 _maxTickets,
         uint256 _raffleDuration
-    ) {
+    ) Ownable(msg.sender) {
         token = IERC20(_tokenAddress);
         ticketPrice = _ticketPrice;
         maxTickets = _maxTickets;
@@ -44,7 +44,7 @@ contract Raffle is Ownable, ReentrancyGuard {
         require(totalTickets > 0, "No tickets sold");
 
         // This is a simple and insecure way of generating randomness
-        uint256 winnerIndex = uint256(keccak256(abi.encodePacked(block.timestamp, block.difficulty))) % participants.length;
+        uint256 winnerIndex = uint256(keccak256(abi.encodePacked(block.timestamp, block.prevrandao))) % participants.length;
         address winner = participants[winnerIndex];
 
         uint256 prizeAmount = token.balanceOf(address(this));
