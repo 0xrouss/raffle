@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 contract Raffle is Ownable, ReentrancyGuard {
+    using SafeERC20 for IERC20;
+
     IERC20 public token;
     uint256 public ticketPrice;
     uint256 public maxTickets;
@@ -14,6 +17,10 @@ contract Raffle is Ownable, ReentrancyGuard {
 
     mapping(address => uint256) public ticketsOwned;
     address[] public participants;
+
+    event TicketsSoldOut();
+    event TicketPurchase(address indexed buyer, uint256 amount);
+    event WinnerPicked(address winner);
 
     constructor(
         address _tokenAddress,
@@ -37,18 +44,28 @@ contract Raffle is Ownable, ReentrancyGuard {
         }
         ticketsOwned[msg.sender] += _amount;
         totalTickets += _amount;
+        emit TicketPurchase(msg.sender, _amount);
+
+        if (totalTickets == maxTickets) {
+            emit TicketsSoldOut();
+        }
     }
 
     function pickWinner() external onlyOwner {
-        require(block.timestamp >= raffleEndTime, "Raffle not ended yet");
+        require(
+            block.timestamp >= raffleEndTime || totalTickets == maxTickets,
+            "Raffle not ended yet or not all tickets sold"
+        );
         require(totalTickets > 0, "No tickets sold");
 
-        // This is a simple and insecure way of generating randomness
-        uint256 winnerIndex = uint256(keccak256(abi.encodePacked(block.timestamp, block.prevrandao))) % participants.length;
+        uint256 winnerIndex = uint256(
+            keccak256(abi.encodePacked(block.timestamp, block.difficulty))
+        ) % participants.length;
         address winner = participants[winnerIndex];
 
         uint256 prizeAmount = token.balanceOf(address(this));
-        token.transfer(winner, prizeAmount);
+        token.safeTransfer(winner, prizeAmount);
+        emit WinnerPicked(winner);
     }
 
     function getTicketsOwned(address _user) public view returns (uint256) {
@@ -56,7 +73,7 @@ contract Raffle is Ownable, ReentrancyGuard {
     }
 
     function getTimeLeft() public view returns (uint256) {
-        if(block.timestamp >= raffleEndTime) {
+        if (block.timestamp >= raffleEndTime) {
             return 0;
         } else {
             return raffleEndTime - block.timestamp;
@@ -68,6 +85,6 @@ contract Raffle is Ownable, ReentrancyGuard {
         payable(owner()).transfer(contractBalance);
 
         uint256 tokenBalance = token.balanceOf(address(this));
-        token.transfer(owner(), tokenBalance);
+        token.safeTransfer(owner(), tokenBalance);
     }
 }
